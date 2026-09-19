@@ -1,11 +1,11 @@
 /*
- * Tiny Tapeout VGA: Night Phase Only Graphics Generator (Ultra-Compact 1x1 Fit)
+ * Tiny Tapeout VGA: Night Phase Only Graphics Generator (Lint-Clean 1x1 Fit)
  * SPDX-License-Identifier: Apache-2.0
  */
 
 `default_nettype none
 
-module tt_um_panfia_sky (
+module tt_um_vga_example (
     input  wire [7:0] ui_in,    // ui_in[7:1]: Moon phase selection
     output wire [7:0] uo_out,   // TinyVGA outputs: {hsync, B[0], G[0], R[0], vsync, B[1], G[1], R[1]}
     input  wire [7:0] uio_in,   // IOs: Input path
@@ -44,9 +44,10 @@ module tt_um_panfia_sky (
     // ------------------------------------------------------------------------
     // 2. LOW-GATE PARALLAX BACKGROUND
     // ------------------------------------------------------------------------
-    wire [7:0] scroll_y = pix_y[7:0] + frame_count;
-    wire bg_star_a    = (scroll_y[6] ^ pix_x[6]) & (pix_y[0] ^ pix_x[0]);
-    wire bg_star_b    = (pix_y[5] ^ pix_x[5]) & (pix_y[1] ^ pix_x[1]);
+    // Truncated adder result to bit [6] to prevent unused bit slice warnings
+    wire scroll_y_bit6 = pix_y[6] + frame_count[6]; 
+    wire bg_star_a     = (scroll_y_bit6 ^ pix_x[6]) & (pix_y[0] ^ pix_x[0]);
+    wire bg_star_b     = (pix_y[5] ^ pix_x[5]) & (pix_y[1] ^ pix_x[1]);
 
     reg [1:0] bg_R, bg_G, bg_B;
     always @(*) begin
@@ -58,17 +59,15 @@ module tt_um_panfia_sky (
     // ------------------------------------------------------------------------
     // 3. ULTRA-LIGHT MOON GENERATOR
     // ------------------------------------------------------------------------
-    // Bounding Box for Moon area (320x240 center approximation)
     wire in_moon_box = (pix_x >= 256 && pix_x < 384) && (pix_y >= 176 && pix_y < 304);
     
-    // Octagonal Corner Clip (removes 4 square corners to form a smooth moon shape)
-    wire [6:0] rel_x = pix_x[6:0];
-    wire [6:0] rel_y = pix_y[6:0];
-    wire corner_clip = (rel_x[6] == rel_y[6]) && (rel_x[5:3] + rel_y[5:3] < 3);
+    // Explicit 4-bit wire slicing [6:3] to prevent lower-bit unused warnings
+    wire [3:0] rel_x_hi = pix_x[6:3];
+    wire [3:0] rel_y_hi = pix_y[6:3];
+    wire corner_clip    = (rel_x_hi[3] == rel_y_hi[3]) && (rel_x_hi[2:0] + rel_y_hi[2:0] < 3);
 
     wire is_moon_shape = in_moon_box && !corner_clip;
 
-    // Phase mask based on ui_in switches
     wire phase_left  = pix_x < 320;
     wire phase_right = pix_x >= 320;
     
@@ -105,7 +104,6 @@ module tt_um_panfia_sky (
             lfsr <= {lfsr[14:0], lfsr[15] ^ lfsr[13]};
 
             if (pix_x == 10'd0 && pix_y == 10'd0) begin
-                // Spawn slot 0
                 if (star_life[0] == 0 && lfsr[0]) begin
                     star_pos[0]  <= lfsr[9:0];
                     star_life[0] <= 3'd7;
@@ -113,7 +111,6 @@ module tt_um_panfia_sky (
                     star_life[0] <= star_life[0] - 1'b1;
                 end
 
-                // Spawn slot 1
                 if (star_life[1] == 0 && !lfsr[0]) begin
                     star_pos[1]  <= lfsr[15:6];
                     star_life[1] <= 3'd7;
@@ -124,7 +121,6 @@ module tt_um_panfia_sky (
         end
     end
 
-    // Rendering Active Stars
     wire [9:0] curr_cell = {pix_y[8:4], pix_x[8:4]};
     wire is_star = ((star_life[0] > 0 && star_pos[0] == curr_cell) ||
                     (star_life[1] > 0 && star_pos[1] == curr_cell)) &&
