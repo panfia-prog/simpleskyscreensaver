@@ -1,5 +1,5 @@
 /*
- * Tiny Tapeout VGA: Night Phase Only Graphics Generator (Synthesis-Optimized)
+ * Tiny Tapeout VGA: Night Phase Only Graphics Generator (Tile-Optimized)
  * - Night Phase: Interactive moon phases, vertical parallax sky, and twinkling colored stars
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -95,27 +95,27 @@ module tt_um_panfia_sky (
     end
 
     // ------------------------------------------------------------------------
-    // 4. ENTITY MANAGER (16 REGISTER-BASED STARS)
+    // 4. ENTITY MANAGER (8 REGISTER-BASED STARS)
     // ------------------------------------------------------------------------
     reg [15:0] lfsr;
     wire feedback = lfsr[15] ^ lfsr[13] ^ lfsr[12] ^ lfsr[10];
 
-    // Explicit registers for up to 16 active stars
-    reg [9:0] star_pos   [0:15]; // Grid Cell Position: Y[9:5], X[4:0]
-    reg [3:0] star_life  [0:15]; // Star lifetime counter
-    reg [1:0] star_color [0:15]; // Color palette index
-    reg       star_shape [0:15]; // Shape: 1 = asterisk, 0 = circle
+    // Explicit registers reduced to 8 active stars for 1x1 tile placement
+    reg [9:0] star_pos   [0:7]; // Grid Cell Position: Y[9:5], X[4:0]
+    reg [3:0] star_life  [0:7]; // Star lifetime counter
+    reg [1:0] star_color [0:7]; // Color palette index
+    reg       star_shape [0:7]; // Shape: 1 = asterisk, 0 = circle
 
-    reg [3:0] head_ptr;
+    reg [2:0] head_ptr; // 3-bit pointer for 8 slots
     integer i;
 
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n) begin
             lfsr     <= 16'hACE1;
-            head_ptr <= 4'd0;
+            head_ptr <= 3'd0;
             
-            // Clean reset to prevent OpenLane $wrmux inference loop
-            for (i = 0; i < 16; i = i + 1) begin
+            // Clean reset initialization for standard cell placement
+            for (i = 0; i < 8; i = i + 1) begin
                 star_pos[i]   <= 10'd0;
                 star_life[i]  <= 4'd0;
                 star_color[i] <= 2'd0;
@@ -136,7 +136,7 @@ module tt_um_panfia_sky (
                 end
 
                 // Decrement life of active stars
-                for (i = 0; i < 16; i = i + 1) begin
+                for (i = 0; i < 8; i = i + 1) begin
                     if (star_life[i] > 4'd0) begin
                         star_life[i] <= star_life[i] - 1'b1;
                     end
@@ -196,7 +196,7 @@ module tt_um_panfia_sky (
     wire signed [3:0] dot_dy = local_y - 3;
     wire is_circle_pixel = ((dot_dx * dot_dx) + (dot_dy * dot_dy) <= 2);
 
-    // Parallel search across all 16 star slots
+    // Parallel search across all 8 star slots
     reg is_star_active;
     reg [1:0] star_color_code;
     
@@ -204,7 +204,7 @@ module tt_um_panfia_sky (
     always @(*) begin
         is_star_active  = 1'b0;
         star_color_code = 2'b00;
-        for (k = 0; k < 16; k = k + 1) begin
+        for (k = 0; k < 8; k = k + 1) begin
             if ((star_life[k] > 0) && (star_pos[k] == current_cell)) begin
                 if (star_shape[k] ? is_asterisk_pixel : is_circle_pixel) begin
                     is_star_active  = ~is_lit_moon;
