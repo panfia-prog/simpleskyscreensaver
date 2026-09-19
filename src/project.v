@@ -1,12 +1,12 @@
 /*
- * Tiny Tapeout VGA: Night Phase Only Graphics Generator (Silent)
+ * Tiny Tapeout VGA: Night Phase Only Graphics Generator (Synthesis-Optimized)
  * - Night Phase: Interactive moon phases, vertical parallax sky, and twinkling colored stars
  * SPDX-License-Identifier: Apache-2.0
  */
 
 `default_nettype none
 
-module tt_um_panfia_sky (
+module tt_um_vga_example (
     input  wire [7:0] ui_in,    // ui_in[7:1]: Priority Moon Phase Selection
     output wire [7:0] uo_out,   // TinyVGA outputs: {hsync, B[0], G[0], R[0], vsync, B[1], G[1], R[1]}
     input  wire [7:0] uio_in,   // IOs: Input path
@@ -95,64 +95,52 @@ module tt_um_panfia_sky (
     end
 
     // ------------------------------------------------------------------------
-    // 4. ENTITY MANAGER (NIGHT STARS GENERATOR)
+    // 4. ENTITY MANAGER (16 REGISTER-BASED STARS)
     // ------------------------------------------------------------------------
     reg [15:0] lfsr;
     wire feedback = lfsr[15] ^ lfsr[13] ^ lfsr[12] ^ lfsr[10];
 
-    // Grid: 32x24 cells
-    reg [6:0] star_timer [0:1023];
-    reg [9:0] active_stars [0:19];  
-    reg [4:0] active_count;          
-    reg [4:0] head_ptr;              
-    reg [9:0] update_idx;
+    // Explicit registers for up to 16 active stars
+    reg [9:0] star_pos   [0:15]; // Grid Cell Position: Y[9:5], X[4:0]
+    reg [3:0] star_life  [0:15]; // Star lifetime counter
+    reg [1:0] star_color [0:15]; // Color palette index
+    reg       star_shape [0:15]; // Shape: 1 = asterisk, 0 = circle
 
-    wire [9:0] candidate_cell = lfsr[9:0];
-    wire [4:0] cand_x = candidate_cell[4:0];
-    wire [4:0] cand_y = candidate_cell[9:5];
+    reg [3:0] head_ptr;
+    integer i;
 
-    wire [9:0] cell_left  = {cand_y, cand_x - 5'd1};
-    wire [9:0] cell_right = {cand_y, cand_x + 5'd1};
-    wire [9:0] cell_up    = {cand_y - 5'd1, cand_x};
-    wire [9:0] cell_down  = {cand_y + 5'd1, cand_x};
-
-    wire is_candidate_clear = (star_timer[candidate_cell][6:3] == 0) &&
-                              (star_timer[cell_left][6:3] == 0) &&
-                              (star_timer[cell_right][6:3] == 0) &&
-                              (star_timer[cell_up][6:3] == 0) &&
-                              (star_timer[cell_down][6:3] == 0);
-
-    always @(posedge clk) begin
+    always @(posedge clk or negedge rst_n) begin
         if (~rst_n) begin
-            lfsr <= 16'hACE1;
-            update_idx <= 0;
-            active_count <= 0;
-            head_ptr <= 0;
+            lfsr     <= 16'hACE1;
+            head_ptr <= 4'd0;
+            
+            // Clean reset to prevent OpenLane $wrmux inference loop
+            for (i = 0; i < 16; i = i + 1) begin
+                star_pos[i]   <= 10'd0;
+                star_life[i]  <= 4'd0;
+                star_color[i] <= 2'd0;
+                star_shape[i] <= 1'b0;
+            end
         end else begin
             lfsr <= {lfsr[14:0], feedback};
 
-            if (pix_x == 0 && pix_y == 0) begin
-                if ((lfsr[15:13] == 3'b101) && is_candidate_clear) begin
-                    if (active_count == 5'd20) begin
-                        star_timer[active_stars[head_ptr]] <= 7'd0;
-                        star_timer[candidate_cell] <= {4'd10, lfsr[2:1], lfsr[0]};
-                        active_stars[head_ptr] <= candidate_cell;
-                        head_ptr <= (head_ptr == 5'd19) ? 5'd0 : head_ptr + 1'b1;
-                    end else begin
-                        star_timer[candidate_cell] <= {4'd10, lfsr[2:1], lfsr[0]};
-                        active_stars[active_count] <= candidate_cell;
-                        active_count <= active_count + 1'b1;
-                    end
+            // Spawn and decrement stars once per frame at top-left pixel
+            if (pix_x == 10'd0 && pix_y == 10'd0) begin
+                // Spawn a new star periodically
+                if (lfsr[15:13] == 3'b101) begin
+                    star_pos[head_ptr]   <= lfsr[9:0];
+                    star_life[head_ptr]  <= 4'd10;
+                    star_color[head_ptr] <= lfsr[2:1];
+                    star_shape[head_ptr] <= lfsr[0];
+                    head_ptr             <= head_ptr + 1'b1;
                 end
 
-                if (star_timer[update_idx][6:3] > 0) begin
-                    star_timer[update_idx][6:3] <= star_timer[update_idx][6:3] - 1'b1;
-                    if (star_timer[update_idx][6:3] == 4'd1 && active_count > 0) begin
-                        active_count <= active_count - 1'b1;
+                // Decrement life of active stars
+                for (i = 0; i < 16; i = i + 1) begin
+                    if (star_life[i] > 4'd0) begin
+                        star_life[i] <= star_life[i] - 1'b1;
                     end
                 end
-                
-                update_idx <= update_idx + 1'b1;
             end
         end
     end
@@ -197,11 +185,6 @@ module tt_um_panfia_sky (
     wire [4:0] grid_x = pix_x[9:5];
     wire [4:0] grid_y = pix_y[9:5];
     wire [9:0] current_cell = {grid_y, grid_x};
-    
-    wire [6:0] star_entry = star_timer[current_cell];
-    wire [3:0] star_life  = star_entry[6:3];
-    wire [1:0] star_color_code = star_entry[2:1]; 
-    wire       star_shape = star_entry[0]; 
 
     wire [2:0] local_x = pix_x[4:2];
     wire [2:0] local_y = pix_y[4:2];
@@ -213,8 +196,23 @@ module tt_um_panfia_sky (
     wire signed [3:0] dot_dy = local_y - 3;
     wire is_circle_pixel = ((dot_dx * dot_dx) + (dot_dy * dot_dy) <= 2);
 
-    wire is_shape_pixel = star_shape ? is_asterisk_pixel : is_circle_pixel;
-    wire is_star_active = (star_life > 0) && is_shape_pixel && !is_lit_moon;
+    // Parallel search across all 16 star slots
+    reg is_star_active;
+    reg [1:0] star_color_code;
+    
+    integer k;
+    always @(*) begin
+        is_star_active  = 1'b0;
+        star_color_code = 2'b00;
+        for (k = 0; k < 16; k = k + 1) begin
+            if ((star_life[k] > 0) && (star_pos[k] == current_cell)) begin
+                if (star_shape[k] ? is_asterisk_pixel : is_circle_pixel) begin
+                    is_star_active  = ~is_lit_moon;
+                    star_color_code = star_color[k];
+                end
+            end
+        end
+    end
 
     reg [5:0] final_star_rgb;
     always @(*) begin
