@@ -6,7 +6,7 @@
 
 `default_nettype none
 
-module tt_um_vga_example (
+module tt_um_panfia_sky (
     input  wire [7:0] ui_in,    // ui_in[7:1]: Priority Moon Phase Selection
     output wire [7:0] uo_out,   // TinyVGA outputs: {hsync, B[0], G[0], R[0], vsync, B[1], G[1], R[1]}
     input  wire [7:0] uio_in,   // IOs: Input path
