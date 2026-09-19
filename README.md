@@ -3,6 +3,10 @@
 # Simple Sky ScreenSaver
 This program utilizes the 8 input pins to change between the moon phases.This project was created for the TinyTapeout IC Design BootCamp using Tiny Tapeout VGA Playground and Gemini.
 
+This project primarily uses the input pins, the following is what each input pin does: ui_in[0] - Night-Cycle ui_in[1] - Waning Crescent ui_in[2] - Third Quarter ui_in[3] - Waning Gibbous ui_in[4] - Full Moon ui_in[5] - Waxing Gibbous ui_in[6] - First Quarter ui_in[7] - Waxing Crescent
+
+The output prioritizes the latter switches (i.e. if both ui_in[2] and ui_in[5] are on, it will output ui_in[5])
+
 - [Read the documentation for project](docs/info.md)
 
 ## What is Tiny Tapeout?
