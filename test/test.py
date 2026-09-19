@@ -108,11 +108,6 @@ async def test_project(dut):
 
     os.makedirs("output", exist_ok=True)
 
-    for i in range(CAPTURE_FRAMES):
-        frame = await capture_frame(i)
-        frame.save(f"output/frame{i}.png")
-
-
 
         if diff.getbbox() is not None:
             diff.save(f"output/diff_{basename}")
