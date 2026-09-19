@@ -1,6 +1,7 @@
 ![](../../workflows/gds/badge.svg) ![](../../workflows/docs/badge.svg) ![](../../workflows/test/badge.svg) ![](../../workflows/fpga/badge.svg)
 
 # Simple Sky ScreenSaver
+This program utilizes the 8 input pins to change between the moon phases.This project was created for the TinyTapeout IC Design BootCamp using Tiny Tapeout VGA Playground and Gemini.
 
 - [Read the documentation for project](docs/info.md)
 
